@@ -126,9 +126,9 @@ type s390x struct {
 // This is called by the runtime package early in program initialization,
 // before normal init functions are run. env is set by runtime on Linux and Darwin
 // if go was compiled with GOEXPERIMENT=debugcpu.
-func initialize(env string) {
+func init() {
 	doinit()
-	processOptions(env)
+	processOptions("")
 }
 
 // options contains the cpu debug options that can be used in GODEBUGCPU.
