@@ -31,11 +31,15 @@ const (
 	cpuid_AVX       = 1 << 28
 
 	// ebx bits
-	cpuid_BMI1 = 1 << 3
-	cpuid_AVX2 = 1 << 5
-	cpuid_BMI2 = 1 << 8
-	cpuid_ERMS = 1 << 9
-	cpuid_ADX  = 1 << 19
+	cpuid_BMI1     = 1 << 3
+	cpuid_AVX2     = 1 << 5
+	cpuid_BMI2     = 1 << 8
+	cpuid_ERMS     = 1 << 9
+	cpuid_ADX      = 1 << 19
+	cpuid_AVX512F  = 1 << 16
+	cpuid_AVX512DQ = 1 << 17
+	cpuid_AVX512BW = 1 << 30
+	cpuid_AVX512VL = 1 << 31
 )
 
 func doinit() {
@@ -54,6 +58,10 @@ func doinit() {
 		{"sse41", &X86.HasSSE41},
 		{"sse42", &X86.HasSSE42},
 		{"ssse3", &X86.HasSSSE3},
+		{"avx512f", &X86.HasAVX512F},
+		{"avx512dq", &X86.HasAVX512DQ},
+		{"avx512bw", &X86.HasAVX512BW},
+		{"avx512vl", &X86.HasAVX512VL},
 
 		// sse2 set as last element so it can easily be removed again. See code below.
 		{"sse2", &X86.HasSSE2},
@@ -84,11 +92,14 @@ func doinit() {
 	X86.HasOSXSAVE = isSet(ecx1, cpuid_OSXSAVE)
 
 	osSupportsAVX := false
+	osSupportsAVX512 := false
 	// For XGETBV, OSXSAVE bit is required and sufficient.
 	if X86.HasOSXSAVE {
 		eax, _ := xgetbv()
 		// Check if XMM and YMM registers have OS support.
 		osSupportsAVX = isSet(eax, 1<<1) && isSet(eax, 1<<2)
+		// Check is ZMM registers have OS support.
+		osSupportsAVX512 = isSet(eax>>5, 7) && isSet(eax>>1, 3)
 	}
 
 	X86.HasAVX = isSet(ecx1, cpuid_AVX) && osSupportsAVX
@@ -100,6 +111,10 @@ func doinit() {
 	_, ebx7, _, _ := cpuid(7, 0)
 	X86.HasBMI1 = isSet(ebx7, cpuid_BMI1)
 	X86.HasAVX2 = isSet(ebx7, cpuid_AVX2) && osSupportsAVX
+	X86.HasAVX512F = isSet(ebx7, cpuid_AVX512F) && osSupportsAVX512
+	X86.HasAVX512DQ = isSet(ebx7, cpuid_AVX512DQ) && osSupportsAVX512
+	X86.HasAVX512BW = isSet(ebx7, cpuid_AVX512BW) && osSupportsAVX512
+	X86.HasAVX512VL = isSet(ebx7, cpuid_AVX512VL) && osSupportsAVX512
 	X86.HasBMI2 = isSet(ebx7, cpuid_BMI2)
 	X86.HasERMS = isSet(ebx7, cpuid_ERMS)
 	X86.HasADX = isSet(ebx7, cpuid_ADX)
