@@ -118,8 +118,154 @@ func doinit() {
 	X86.HasBMI2 = isSet(ebx7, cpuid_BMI2)
 	X86.HasERMS = isSet(ebx7, cpuid_ERMS)
 	X86.HasADX = isSet(ebx7, cpuid_ADX)
+
+	X86.Cache = getCacheSize()
 }
 
 func isSet(hwc uint32, value uint32) bool {
 	return hwc&value != 0
+}
+
+// getCacheSize is from
+// https://github.com/klauspost/cpuid/blob/5a626f7029c910cc8329dae5405ee4f65034bce5/cpuid.go#L723
+func getCacheSize() Cache {
+	c := Cache{
+		L1I: -1,
+		L1D: -1,
+		L2:  -1,
+		L3:  -1,
+	}
+
+	vendor := vendorID()
+	switch vendor {
+	case Intel:
+		if maxFunctionID() < 4 {
+			return c
+		}
+		for i := uint32(0); ; i++ {
+			eax, ebx, ecx, _ := cpuid(4, i)
+			cacheType := eax & 15
+			if cacheType == 0 {
+				break
+			}
+			cacheLevel := (eax >> 5) & 7
+			coherency := int(ebx&0xfff) + 1
+			partitions := int((ebx>>12)&0x3ff) + 1
+			associativity := int((ebx>>22)&0x3ff) + 1
+			sets := int(ecx) + 1
+			size := associativity * partitions * coherency * sets
+			switch cacheLevel {
+			case 1:
+				if cacheType == 1 {
+					// 1 = Data Cache
+					c.L1D = size
+				} else if cacheType == 2 {
+					// 2 = Instruction Cache
+					c.L1I = size
+				} else {
+					if c.L1D < 0 {
+						c.L1I = size
+					}
+					if c.L1I < 0 {
+						c.L1I = size
+					}
+				}
+			case 2:
+				c.L2 = size
+			case 3:
+				c.L3 = size
+			}
+		}
+	case AMD, Hygon:
+		// Untested.
+		if maxExtendedFunction() < 0x80000005 {
+			return c
+		}
+		_, _, ecx, edx := cpuid(0x80000005, 0)
+		c.L1D = int(((ecx >> 24) & 0xFF) * 1024)
+		c.L1I = int(((edx >> 24) & 0xFF) * 1024)
+
+		if maxExtendedFunction() < 0x80000006 {
+			return c
+		}
+		_, _, ecx, _ = cpuid(0x80000006, 0)
+		c.L2 = int(((ecx >> 16) & 0xFFFF) * 1024)
+	}
+
+	return c
+}
+
+func maxFunctionID() uint32 {
+	a, _, _, _ := cpuid(0, 0)
+	return a
+}
+
+func maxExtendedFunction() uint32 {
+	eax, _, _, _ := cpuid(0x80000000, 0)
+	return eax
+}
+
+const (
+	Other = iota
+	Intel
+	AMD
+	VIA
+	Transmeta
+	NSC
+	KVM  // Kernel-based Virtual Machine
+	MSVM // Microsoft Hyper-V or Windows Virtual PC
+	VMware
+	XenHVM
+	Bhyve
+	Hygon
+)
+
+// Except from http://en.wikipedia.org/wiki/CPUID#EAX.3D0:_Get_vendor_ID
+var vendorMapping = map[string]int{
+	"AMDisbetter!": AMD,
+	"AuthenticAMD": AMD,
+	"CentaurHauls": VIA,
+	"GenuineIntel": Intel,
+	"TransmetaCPU": Transmeta,
+	"GenuineTMx86": Transmeta,
+	"Geode by NSC": NSC,
+	"VIA VIA VIA ": VIA,
+	"KVMKVMKVMKVM": KVM,
+	"Microsoft Hv": MSVM,
+	"VMwareVMware": VMware,
+	"XenVMMXenVMM": XenHVM,
+	"bhyve bhyve ": Bhyve,
+	"HygonGenuine": Hygon,
+}
+
+func vendorID() int {
+	_, b, c, d := cpuid(0, 0)
+	v := valAsString(b, d, c)
+	vend, ok := vendorMapping[string(v)]
+	if !ok {
+		return Other
+	}
+	return vend
+}
+
+func valAsString(values ...uint32) []byte {
+	r := make([]byte, 4*len(values))
+	for i, v := range values {
+		dst := r[i*4:]
+		dst[0] = byte(v & 0xff)
+		dst[1] = byte((v >> 8) & 0xff)
+		dst[2] = byte((v >> 16) & 0xff)
+		dst[3] = byte((v >> 24) & 0xff)
+		switch {
+		case dst[0] == 0:
+			return r[:i*4]
+		case dst[1] == 0:
+			return r[:i*4+1]
+		case dst[2] == 0:
+			return r[:i*4+2]
+		case dst[3] == 0:
+			return r[:i*4+3]
+		}
+	}
+	return r
 }

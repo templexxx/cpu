@@ -38,7 +38,18 @@ type x86 struct {
 	HasSSSE3     bool
 	HasSSE41     bool
 	HasSSE42     bool
-	_            [CacheLineSize]byte
+
+	Cache Cache
+	_     [CacheLineSize]byte
+}
+
+// CPU Cache Size.
+// -1 if undetected.
+type Cache struct {
+	L1I int
+	L1D int
+	L2  int
+	L3  int
 }
 
 var PPC64 ppc64
