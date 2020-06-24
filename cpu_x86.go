@@ -120,6 +120,15 @@ func doinit() {
 	X86.HasADX = isSet(ebx7, cpuid_ADX)
 
 	X86.Cache = getCacheSize()
+
+	// "Loads data or instructions from memory to the second-level cache.
+	// To use the streamer, organize the data or instructions in blocks of 128 bytes,
+	// aligned on 128 bytes."
+	// From <Intel® 64 and IA-32 architectures optimization reference manual>,
+	// in section 3.7.3 "Hardware Prefetching for Second-Level Cache"
+	//
+	// In practice, I have found use 128bytes can gain better performance than 64bytes (one cache line).
+	X86.FalseSharingRange = 128
 }
 
 func isSet(hwc uint32, value uint32) bool {

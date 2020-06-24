@@ -41,6 +41,8 @@ type x86 struct {
 
 	Cache Cache
 	_     [CacheLineSize]byte
+
+	FalseSharingRange int
 }
 
 // CPU Cache Size.
