@@ -12,6 +12,15 @@ var debugOptions bool
 
 var X86 x86
 
+// "Loads data or instructions from memory to the second-level cache.
+// To use the streamer, organize the data or instructions in blocks of 128 bytes,
+// aligned on 128 bytes."
+// From <Intel® 64 and IA-32 architectures optimization reference manual>,
+// in section 3.7.3 "Hardware Prefetching for Second-Level Cache"
+//
+// In practice, I have found use 128bytes can gain better performance than 64bytes (one cache line).
+const X86FalseSharingRange = 128
+
 // The booleans in x86 contain the correspondingly named cpuid feature bit.
 // HasAVX and HasAVX2 are only set if the OS does support XMM and YMM registers
 // in addition to the cpuid feature bit being set.
@@ -41,8 +50,6 @@ type x86 struct {
 
 	Cache Cache
 	_     [CacheLineSize]byte
-
-	FalseSharingRange int
 }
 
 // CPU Cache Size.
