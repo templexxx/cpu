@@ -40,6 +40,9 @@ const (
 	cpuid_AVX512DQ = 1 << 17
 	cpuid_AVX512BW = 1 << 30
 	cpuid_AVX512VL = 1 << 31
+
+	// edx bits
+	cpuid_Invariant_TSC = 1 << 8
 )
 
 func doinit() {
@@ -62,6 +65,7 @@ func doinit() {
 		{"avx512dq", &X86.HasAVX512DQ},
 		{"avx512bw", &X86.HasAVX512BW},
 		{"avx512vl", &X86.HasAVX512VL},
+		{"invariant_tsc", &X86.HasInvariantTSC},
 
 		// sse2 set as last element so it can easily be removed again. See code below.
 		{"sse2", &X86.HasSSE2},
@@ -120,10 +124,20 @@ func doinit() {
 	X86.HasADX = isSet(ebx7, cpuid_ADX)
 
 	X86.Cache = getCacheSize()
+
+	X86.HasInvariantTSC = hasInvariantTSC()
 }
 
 func isSet(hwc uint32, value uint32) bool {
 	return hwc&value != 0
+}
+
+func hasInvariantTSC() bool {
+	if maxExtendedFunction() < 0x80000007 {
+		return false
+	}
+	_, _, _, edx := cpuid(0x80000007, 0)
+	return isSet(edx, cpuid_Invariant_TSC)
 }
 
 // getCacheSize is from

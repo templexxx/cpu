@@ -26,7 +26,7 @@ const X86FalseSharingRange = 128
 // in addition to the cpuid feature bit being set.
 // The struct is padded to avoid false sharing.
 type x86 struct {
-	_            [CacheLineSize]byte
+	_            [X86FalseSharingRange]byte
 	HasAES       bool
 	HasADX       bool
 	HasAVX       bool
@@ -48,8 +48,13 @@ type x86 struct {
 	HasSSE41     bool
 	HasSSE42     bool
 
+	// The invariant TSC will run at a constant rate in all ACPI P-, C-, and T-states.
+	// This is the architectural behavior moving forward. On processors with
+	// invariant TSC support, the OS may use the TSC for wall clock timer services (instead of ACPI or HPET timers).
+	HasInvariantTSC bool
+
 	Cache Cache
-	_     [CacheLineSize]byte
+	_     [X86FalseSharingRange]byte
 }
 
 // CPU Cache Size.
