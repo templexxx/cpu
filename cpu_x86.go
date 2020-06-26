@@ -6,6 +6,11 @@
 
 package cpu
 
+import (
+	"fmt"
+	"strings"
+)
+
 const CacheLineSize = 64
 
 // cpuid is implemented in cpu_x86.s.
@@ -126,6 +131,14 @@ func doinit() {
 	X86.Cache = getCacheSize()
 
 	X86.HasInvariantTSC = hasInvariantTSC()
+
+	X86.Family, X86.Model = getFamilyModel()
+
+	X86.Signature = makeSignature(X86.Family, X86.Model)
+
+	X86.Name = getName()
+
+	X86.TSCFrequency = getTSCFrequency(X86.Name, X86.Signature)
 }
 
 func isSet(hwc uint32, value uint32) bool {
@@ -138,6 +151,102 @@ func hasInvariantTSC() bool {
 	}
 	_, _, _, edx := cpuid(0x80000007, 0)
 	return isSet(edx, cpuid_Invariant_TSC)
+}
+
+func getName() string {
+	if maxExtendedFunction() >= 0x80000004 {
+		v := make([]uint32, 0, 48)
+		for i := uint32(0); i < 3; i++ {
+			a, b, c, d := cpuid(0x80000002+i, 0)
+			v = append(v, a, b, c, d)
+		}
+		return strings.Trim(string(valAsString(v...)), " ")
+	}
+	return "unknown"
+}
+
+func getTSCFrequency(name, sign string) uint64 {
+	if maxFunctionID() < 0x15 {
+		return 0
+	}
+
+	eax, ebx, ecx, _ := cpuid(0x15, 0)
+
+	// If ebx is 0, the TSC/”core crystal clock” ratio is not enumerated.
+	// We won't provide TSC frequency detection in this situation.
+	if eax == 0 || ebx == 0 {
+		return 0
+	}
+
+	if ecx == 0 { // Crystal clock frequency is not enumerated.
+		ecx = getCrystalClockFrequency(name, sign)
+	}
+
+	// TSC frequency = “core crystal clock frequency” * EBX/EAX.
+	return uint64(ecx) * (uint64(ebx) / uint64(eax))
+}
+
+const (
+	core7th1 = "06_9EH"
+	core7th2 = "06_8EH"
+	core6th1 = "06_4EH"
+	core6th2 = "06_5EH"
+
+	xeonScalable = "06_55H"
+)
+
+// Actually the crystal provided by Intel is not so accurate,
+// e.g. SkyLake server CPU may have issue:
+// see https://lore.kernel.org/lkml/ff6dcea166e8ff8f2f6a03c17beab2cb436aa779.1513920414.git.len.brown@intel.com/
+// for more details.
+func getCrystalClockFrequency(name, sign string) uint32 {
+
+	if strings.Contains(name, "Core") {
+		if sign == core6th1 || sign == core6th2 ||
+			sign == core7th1 || sign == core7th2 {
+			return 24 * 1000 * 1000
+		}
+	} else if strings.Contains(name, "Xeon") && strings.Contains(name, "Scalable") {
+		if sign == xeonScalable {
+			return 25 * 1000 * 1000
+		}
+	} else if strings.Contains(name, "Xeon") && strings.Contains(name, "W-") {
+		return 24 * 1000 * 1000
+	}
+
+	return 0
+}
+
+func getFamilyModel() (uint32, uint32) {
+	if maxFunctionID() < 0x1 {
+		return 0, 0
+	}
+	eax, _, _, _ := cpuid(1, 0)
+	family := (eax >> 8) & 0xf
+	displayFamily := family
+	if family == 0xf {
+		displayFamily = ((eax >> 20) & 0xff) + family
+	}
+	model := (eax >> 4) & 0xf
+	displayModel := model
+	if family == 0x6 || family == 0xf {
+		displayModel = ((eax >> 12) & 0xf0) + model
+	}
+	return displayFamily, displayModel
+}
+
+// signature format: XX_XXH
+func makeSignature(family, model uint32) string {
+	signature := strings.ToUpper(fmt.Sprintf("0%x_0%xH", family, model))
+	ss := strings.Split(signature, "_")
+	for i, s := range ss {
+		// Maybe insert too more `0`, drop it.
+		if len(s) > 2 {
+			s = s[1:]
+			ss[i] = s
+		}
+	}
+	return strings.Join(ss, "_")
 }
 
 // getCacheSize is from

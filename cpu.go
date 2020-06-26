@@ -47,14 +47,27 @@ type x86 struct {
 	HasSSSE3     bool
 	HasSSE41     bool
 	HasSSE42     bool
-
 	// The invariant TSC will run at a constant rate in all ACPI P-, C-, and T-states.
 	// This is the architectural behavior moving forward. On processors with
 	// invariant TSC support, the OS may use the TSC for wall clock timer services (instead of ACPI or HPET timers).
 	HasInvariantTSC bool
 
 	Cache Cache
-	_     [X86FalseSharingRange]byte
+
+	// TSCFrequency only meaningful when HasInvariantTSC == true.
+	// Unit: Hz.
+	//
+	// Warn:
+	// 1. If it's 0, means can't get it. Don't use it.
+	// 2. Don't use it if you want "100%" precise timestamp.
+	TSCFrequency uint64
+
+	Name      string
+	Signature string // DisplayFamily_DisplayModel.
+	Family    uint32 // CPU family number.
+	Model     uint32 // CPU model number.
+
+	_ [X86FalseSharingRange]byte
 }
 
 // CPU Cache Size.
