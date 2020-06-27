@@ -186,6 +186,9 @@ func getTSCFrequency(name, sign string) uint64 {
 	return uint64(ecx) * (uint64(ebx) / uint64(eax))
 }
 
+// Copied from: CPUID Signature values of DisplayFamily and DisplayModel,
+// in Intel® 64 and IA-32 Architectures Software Developer’s Manual
+// Volume 4: Model-Specific Registers
 const (
 	core7th1 = "06_9EH"
 	core7th2 = "06_8EH"
@@ -206,7 +209,7 @@ func getCrystalClockFrequency(name, sign string) uint32 {
 			sign == core7th1 || sign == core7th2 {
 			return 24 * 1000 * 1000
 		}
-	} else if strings.Contains(name, "Xeon") && strings.Contains(name, "Scalable") {
+	} else if strings.Contains(name, "Xeon") {
 		if sign == xeonScalable {
 			return 25 * 1000 * 1000
 		}
