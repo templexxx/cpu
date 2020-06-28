@@ -8,6 +8,7 @@ package cpu
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -198,24 +199,34 @@ const (
 	xeonScalable = "06_55H"
 )
 
-// Actually the crystal provided by Intel is not so accurate,
+// For Intel processors in which CPUID.15H.EBX[31:0] ÷ CPUID.0x15.EAX[31:0] is enumerated
+// but CPUID.15H.ECX is not enumerated using this function to get nominal core crystal clock frequency.
+//
+// Actually these crystal clock frequencies provided by Intel are not so accurate in some cases,
 // e.g. SkyLake server CPU may have issue:
 // see https://lore.kernel.org/lkml/ff6dcea166e8ff8f2f6a03c17beab2cb436aa779.1513920414.git.len.brown@intel.com/
 // for more details.
 func getCrystalClockFrequency(name, sign string) uint32 {
 
 	if strings.Contains(name, "Core") {
+		// Other Processor Families/Processor Number Series may share the same sign,
+		// need confirm it's 6th or 7th generation.
+		ok, err := regexp.Match("i[3579]-([67])\\d{3}", []byte(name))
+		if err != nil || !ok {
+			return 0
+		}
 		if sign == core6th1 || sign == core6th2 ||
 			sign == core7th1 || sign == core7th2 {
 			return 24 * 1000 * 1000
 		}
 	} else if strings.Contains(name, "Xeon") {
 		if sign == xeonScalable {
-			return 25 * 1000 * 1000
+			return 25 * 1000 * 1000 // Only Scalable with this sign is 25MHz.
 		}
-	} else if strings.Contains(name, "Xeon") && strings.Contains(name, "W-") {
-		return 24 * 1000 * 1000
 	}
+	//} else if strings.Contains(name, "Xeon") && strings.Contains(name, "W-") {
+	//	return 24 * 1000 * 1000	// TODO need check on Xeon W
+	//}
 
 	return 0
 }
