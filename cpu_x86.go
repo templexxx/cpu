@@ -8,7 +8,6 @@ package cpu
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 )
 
@@ -139,7 +138,7 @@ func doinit() {
 
 	X86.Name = getName()
 
-	X86.TSCFrequency = getTSCFrequency(X86.Name, X86.Signature)
+	X86.TSCFrequency = getNativeTSCFrequency(X86.Name, X86.Signature)
 }
 
 func isSet(hwc uint32, value uint32) bool {
@@ -166,11 +165,22 @@ func getName() string {
 	return "unknown"
 }
 
-func getTSCFrequency(name, sign string) uint64 {
+// getNativeTSCFrequency gets TSC frequency from CPUID,
+// only supports Intel (Skylake or later microarchitecture) & key information is from Intel manual & kernel codes
+// (especially this commit: https://github.com/torvalds/linux/commit/604dc9170f2435d27da5039a3efd757dceadc684).
+func getNativeTSCFrequency(name, sign string) uint64 {
+
+	if vendorID() != Intel {
+		return 0
+	}
+
 	if maxFunctionID() < 0x15 {
 		return 0
 	}
 
+	// ApolloLake, GeminiLake, CannonLake (and presumably all new chipsets
+	// from this point) report the crystal frequency directly via CPUID.0x15.
+	// That's definitive data that we can rely upon.
 	eax, ebx, ecx, _ := cpuid(0x15, 0)
 
 	// If ebx is 0, the TSC/”core crystal clock” ratio is not enumerated.
@@ -179,8 +189,10 @@ func getTSCFrequency(name, sign string) uint64 {
 		return 0
 	}
 
+	// Skylake, Kabylake and all variants of those two chipsets report a
+	// crystal frequency of zero.
 	if ecx == 0 { // Crystal clock frequency is not enumerated.
-		ecx = getCrystalClockFrequency(name, sign)
+		ecx = getCrystalClockFrequency(sign)
 	}
 
 	// TSC frequency = “core crystal clock frequency” * EBX/EAX.
@@ -190,43 +202,48 @@ func getTSCFrequency(name, sign string) uint64 {
 // Copied from: CPUID Signature values of DisplayFamily and DisplayModel,
 // in Intel® 64 and IA-32 Architectures Software Developer’s Manual
 // Volume 4: Model-Specific Registers
+// & https://github.com/torvalds/linux/blob/master/arch/x86/include/asm/intel-family.h
 const (
-	core7th1 = "06_9EH"
-	core7th2 = "06_8EH"
-	core6th1 = "06_4EH"
-	core6th2 = "06_5EH"
-
-	xeonScalable = "06_55H"
+	IntelFam6SkylakeL  = "06_4EH"
+	IntelFam6Skylake   = "06_5EH"
+	IntelFam6SkylakeX  = "06_55H"
+	IntelFam6KabylakeL = "06_8EH"
+	IntelFam6Kabylake  = "06_9EH"
 )
 
-// For Intel processors in which CPUID.15H.EBX[31:0] ÷ CPUID.0x15.EAX[31:0] is enumerated
+// getCrystalClockFrequency gets crystal clock frequency
+// for Intel processors in which CPUID.15H.EBX[31:0] ÷ CPUID.0x15.EAX[31:0] is enumerated
 // but CPUID.15H.ECX is not enumerated using this function to get nominal core crystal clock frequency.
 //
-// Actually these crystal clock frequencies provided by Intel are not so accurate in some cases,
-// e.g. SkyLake server CPU may have issue:
+// Actually these crystal clock frequencies provided by Intel hardcoded tables are not so accurate in some cases,
+// e.g. SkyLake server CPU may have issue (All SKX subject the crystal to an EMI reduction circuit that
+//reduces its actual frequency by (approximately) -0.25%):
 // see https://lore.kernel.org/lkml/ff6dcea166e8ff8f2f6a03c17beab2cb436aa779.1513920414.git.len.brown@intel.com/
 // for more details.
-func getCrystalClockFrequency(name, sign string) uint32 {
+// With this report, I set a coefficient (0.9975) for IntelFam6SkyLakeX.
+//
+// Unlike the kernel way (mentioned in https://github.com/torvalds/linux/commit/604dc9170f2435d27da5039a3efd757dceadc684),
+// I prefer the Intel hardcoded tables,
+// because after some testing (comparing with wall clock, see https://github.com/templexxx/tsc/tsc_test.go for more details),
+// I found hardcoded tables are more accurate.
+func getCrystalClockFrequency(sign string) uint32 {
 
-	if strings.Contains(name, "Core") {
-		// Other Processor Families/Processor Number Series may share the same sign,
-		// need confirm it's 6th or 7th generation.
-		ok, err := regexp.Match("i[3579]-([67])\\d{3}", []byte(name))
-		if err != nil || !ok {
-			return 0
-		}
-		if sign == core6th1 || sign == core6th2 ||
-			sign == core7th1 || sign == core7th2 {
-			return 24 * 1000 * 1000
-		}
-	} else if strings.Contains(name, "Xeon") {
-		if sign == xeonScalable {
-			return 25 * 1000 * 1000 // Only Scalable with this sign is 25MHz.
-		}
+	if maxFunctionID() < 0x16 {
+		return 0
 	}
-	//} else if strings.Contains(name, "Xeon") && strings.Contains(name, "W-") {
-	//	return 24 * 1000 * 1000	// TODO need check on Xeon W
-	//}
+
+	switch sign {
+	case IntelFam6SkylakeL:
+		return 24 * 1000 * 1000
+	case IntelFam6Skylake:
+		return 24 * 1000 * 1000
+	case IntelFam6SkylakeX:
+		return 25 * 1000 * 1000 * 0.9975
+	case IntelFam6KabylakeL:
+		return 24 * 1000 * 1000
+	case IntelFam6Kabylake:
+		return 24 * 1000 * 1000
+	}
 
 	return 0
 }
