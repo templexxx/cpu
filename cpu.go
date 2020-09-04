@@ -62,10 +62,11 @@ type x86 struct {
 	// 2. Don't use it if you want "100%" precise timestamp.
 	TSCFrequency uint64
 
-	Name      string
-	Signature string // DisplayFamily_DisplayModel.
-	Family    uint32 // CPU family number.
-	Model     uint32 // CPU model number.
+	Name       string
+	Signature  string // DisplayFamily_DisplayModel.
+	Family     uint32 // CPU family number.
+	Model      uint32 // CPU model number.
+	SteppingID uint32
 
 	_ [X86FalseSharingRange]byte
 }
