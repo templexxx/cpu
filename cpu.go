@@ -27,6 +27,7 @@ const X86FalseSharingRange = 128
 // The struct is padded to avoid false sharing.
 type x86 struct {
 	_            [X86FalseSharingRange]byte
+	HasCMPXCHG16B bool
 	HasAES       bool
 	HasADX       bool
 	HasAVX       bool

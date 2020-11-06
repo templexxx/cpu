@@ -34,6 +34,7 @@ const (
 	cpuid_AES       = 1 << 25
 	cpuid_OSXSAVE   = 1 << 27
 	cpuid_AVX       = 1 << 28
+	cpuid_CMPXCHG16B = 1 << 13
 
 	// ebx bits
 	cpuid_BMI1     = 1 << 3
@@ -98,6 +99,7 @@ func doinit() {
 	X86.HasSSE42 = isSet(ecx1, cpuid_SSE42)
 	X86.HasPOPCNT = isSet(ecx1, cpuid_POPCNT)
 	X86.HasAES = isSet(ecx1, cpuid_AES)
+	X86.HasCMPXCHG16B = isSet(ecx1, cpuid_CMPXCHG16B)
 	X86.HasOSXSAVE = isSet(ecx1, cpuid_OSXSAVE)
 
 	osSupportsAVX := false
