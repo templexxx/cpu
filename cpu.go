@@ -59,8 +59,7 @@ type x86 struct {
 	// Unit: Hz.
 	//
 	// Warn:
-	// 1. If it's 0, means can't get it. Don't use it.
-	// 2. Don't use it if you want "100%" precise timestamp.
+	// 1. If it's 0, means failed to get it from frequency table provided by Intel manual.
 	TSCFrequency uint64
 
 	Name       string
